@@ -45,6 +45,7 @@ app.*.map.json
 /android/app/release
 
 # Credenciales sensibles
-lib/services/supabase_service.dart
+.env
+.env.*
 DOCUMENTACION_API.md
 bd/
