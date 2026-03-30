@@ -214,34 +214,33 @@ class _CustomCameraViewState extends State<CustomCameraView> {
       return Container(color: AppColors.background);
     }
 
-    // Llenar toda la pantalla con el preview de la cámara,
-    // recortando los bordes si es necesario (como una app nativa).
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final screenAspect = constraints.maxWidth / constraints.maxHeight;
-        // El CameraController reporta aspect ratio en landscape (ej: 1.77 = 16:9).
-        // Para portrait, necesitamos invertirlo.
-        final cameraAspect = _controller!.value.aspectRatio;
-        // En portrait, el preview real es más ancho que alto (landscape sensor).
-        // Necesitamos escalar para cubrir todo el viewport portrait.
-        final previewAspect = 1 / cameraAspect;
+    if (kIsWeb) {
+      // En web móvil (iPhone Safari), el navegador entrega el video
+      // ya rotado en la orientación correcta del dispositivo.
+      // No debemos manipular aspect ratios ni hacer zoom/crop.
+      // Simplemente dejamos que el CameraPreview llene el espacio disponible.
+      return SizedBox.expand(
+        child: CameraPreview(_controller!),
+      );
+    }
 
-        return ClipRect(
-          child: OverflowBox(
-            maxWidth: double.infinity,
-            maxHeight: double.infinity,
-            child: SizedBox(
-              width: screenAspect > previewAspect
-                  ? constraints.maxWidth
-                  : constraints.maxHeight * previewAspect,
-              height: screenAspect > previewAspect
-                  ? constraints.maxWidth / previewAspect
-                  : constraints.maxHeight,
-              child: CameraPreview(_controller!),
-            ),
-          ),
-        );
-      },
+    // En plataformas nativas: usar FittedBox.cover para llenar la pantalla
+    // manteniendo el aspect ratio y recortando lo que sobre.
+    final previewSize = _controller!.value.previewSize;
+    if (previewSize == null) {
+      return SizedBox.expand(child: CameraPreview(_controller!));
+    }
+
+    return SizedBox.expand(
+      child: FittedBox(
+        fit: BoxFit.cover,
+        clipBehavior: Clip.hardEdge,
+        child: SizedBox(
+          width: previewSize.height,
+          height: previewSize.width,
+          child: CameraPreview(_controller!),
+        ),
+      ),
     );
   }
 
