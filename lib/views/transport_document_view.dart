@@ -4,7 +4,6 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:prueba_match/services/registro_service.dart';
 import 'package:prueba_match/views/vehicle_data_view.dart';
-import 'package:prueba_match/utils/image_helper.dart';
 import 'package:prueba_match/views/custom_camera_view.dart';
 import 'package:prueba_match/widgets/step_header.dart';
 
@@ -26,7 +25,6 @@ class TransportDocumentView extends StatefulWidget {
 
 class _TransportDocumentViewState extends State<TransportDocumentView> {
   final RegistroService _registroService = RegistroService();
-  final ImageHelper _imageHelper = ImageHelper();
 
   bool _isUploading = false;
   Uint8List? _capturedBytes;
@@ -58,8 +56,8 @@ class _TransportDocumentViewState extends State<TransportDocumentView> {
       ),
     );
     if (bytes != null) {
-      final compressed = await _imageHelper.compressBytes(bytes, quality: 80);
-      setState(() => _capturedBytes = compressed ?? bytes);
+      // Los bytes ya vienen optimizados desde CustomCameraView
+      setState(() => _capturedBytes = bytes);
     }
   }
 

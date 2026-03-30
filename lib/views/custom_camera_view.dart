@@ -21,6 +21,7 @@ class _CustomCameraViewState extends State<CustomCameraView> {
   CameraController? _controller;
   List<CameraDescription>? _cameras;
   bool _isInitializing = true;
+  bool _isCapturing = false;
 
   @override
   void initState() {
@@ -48,9 +49,10 @@ class _CustomCameraViewState extends State<CustomCameraView> {
         );
       }
 
+      // Usar resolución alta pero no máxima para mejorar rendimiento
       _controller = CameraController(
         selectedCamera,
-        ResolutionPreset.max,
+        ResolutionPreset.high,
         enableAudio: false,
       );
 
@@ -89,36 +91,33 @@ class _CustomCameraViewState extends State<CustomCameraView> {
 
   Future<void> _takePicture() async {
     if (_controller == null || !_controller!.value.isInitialized) return;
-    if (_controller!.value.isTakingPicture) return;
+    if (_controller!.value.isTakingPicture || _isCapturing) return;
 
     try {
-      if (mounted) {
-        setState(() {
-          _isInitializing = true;
-        });
-      }
+      setState(() {
+        _isCapturing = true;
+      });
 
       final XFile image = await _controller!.takePicture();
       Uint8List bytes = await image.readAsBytes();
 
-      if (widget.mode == CameraMode.selfie) {
-        final flippedBytes = _flipImageHorizontally(bytes);
-        if (flippedBytes != null) {
-          bytes = flippedBytes;
-        }
-      }
+      // Procesar la imagen en un isolate (compute) para no bloquear el UI
+      final processedBytes = await compute(
+        _processImage,
+        _ImageProcessRequest(
+          bytes: bytes,
+          isSelfie: widget.mode == CameraMode.selfie,
+        ),
+      );
 
       if (mounted) {
-        setState(() {
-          _isInitializing = false;
-        });
-        Navigator.pop(context, bytes);
+        Navigator.pop(context, processedBytes);
       }
     } catch (e) {
       debugPrint('Error capturando foto: $e');
       if (mounted) {
         setState(() {
-          _isInitializing = false;
+          _isCapturing = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Error al tomar la foto')),
@@ -133,6 +132,26 @@ class _CustomCameraViewState extends State<CustomCameraView> {
       return Scaffold(
         backgroundColor: AppColors.background,
         body: Center(child: CircularProgressIndicator(color: AppColors.textPrimary)),
+      );
+    }
+
+    // Mostrar indicador de procesamiento después de capturar
+    if (_isCapturing) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(color: AppColors.accent),
+              const SizedBox(height: 16),
+              Text(
+                'Procesando imagen...',
+                style: TextStyle(color: AppColors.textPrimary, fontSize: 16),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
@@ -191,22 +210,38 @@ class _CustomCameraViewState extends State<CustomCameraView> {
   }
 
   Widget _buildCameraPreview() {
-    final size = MediaQuery.of(context).size;
     if (_controller == null || !_controller!.value.isInitialized) {
       return Container(color: AppColors.background);
     }
 
-    double cameraAspect = _controller!.value.aspectRatio;
+    // Llenar toda la pantalla con el preview de la cámara,
+    // recortando los bordes si es necesario (como una app nativa).
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenAspect = constraints.maxWidth / constraints.maxHeight;
+        // El CameraController reporta aspect ratio en landscape (ej: 1.77 = 16:9).
+        // Para portrait, necesitamos invertirlo.
+        final cameraAspect = _controller!.value.aspectRatio;
+        // En portrait, el preview real es más ancho que alto (landscape sensor).
+        // Necesitamos escalar para cubrir todo el viewport portrait.
+        final previewAspect = 1 / cameraAspect;
 
-    if (size.width < size.height) {
-      cameraAspect = 1 / cameraAspect;
-    }
-
-    return Center(
-      child: AspectRatio(
-        aspectRatio: cameraAspect,
-        child: CameraPreview(_controller!),
-      ),
+        return ClipRect(
+          child: OverflowBox(
+            maxWidth: double.infinity,
+            maxHeight: double.infinity,
+            child: SizedBox(
+              width: screenAspect > previewAspect
+                  ? constraints.maxWidth
+                  : constraints.maxHeight * previewAspect,
+              height: screenAspect > previewAspect
+                  ? constraints.maxWidth / previewAspect
+                  : constraints.maxHeight,
+              child: CameraPreview(_controller!),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -392,18 +427,35 @@ class DottedBorderPainter extends CustomPainter {
   }
 }
 
-/// Voltea una imagen horizontalmente (para mirror de selfie).
-/// Trabaja directamente con bytes, sin usar dart:io File.
-Uint8List? _flipImageHorizontally(Uint8List bytes) {
-  try {
-    img.Image? decodedImage = img.decodeImage(bytes);
-    if (decodedImage != null) {
-      decodedImage = img.flipHorizontal(decodedImage);
-      final newBytes = img.encodeJpg(decodedImage, quality: 100);
-      return Uint8List.fromList(newBytes);
-    }
-  } catch (e) {
-    debugPrint("Error flipping: $e");
+// --- Procesamiento de imagen en isolate (fuera del hilo principal) ---
+
+class _ImageProcessRequest {
+  final Uint8List bytes;
+  final bool isSelfie;
+
+  _ImageProcessRequest({required this.bytes, required this.isSelfie});
+}
+
+/// Procesa la imagen en un isolate separado:
+/// - Redimensiona a un máximo razonable (1200px de ancho)
+/// - Voltea horizontalmente si es selfie
+/// - Comprime a JPEG calidad 80
+/// Todo en un solo paso de decode/encode.
+Uint8List _processImage(_ImageProcessRequest request) {
+  img.Image? decoded = img.decodeImage(request.bytes);
+  if (decoded == null) return request.bytes;
+
+  // Redimensionar si es muy grande (max 1200px de ancho)
+  if (decoded.width > 1200) {
+    decoded = img.copyResize(decoded, width: 1200, maintainAspect: true);
   }
-  return null;
+
+  // Voltear horizontalmente si es selfie (mirror)
+  if (request.isSelfie) {
+    decoded = img.flipHorizontal(decoded);
+  }
+
+  // Codificar como JPEG con calidad 80 (buen balance calidad/peso)
+  final compressed = img.encodeJpg(decoded, quality: 80);
+  return Uint8List.fromList(compressed);
 }

@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:prueba_match/models/chofer_match_data.dart';
 import 'package:prueba_match/services/face_match_service.dart';
-import 'package:prueba_match/utils/image_helper.dart';
 import 'package:prueba_match/utils/rut_utils.dart';
 import 'package:prueba_match/models/license_data.dart';
 import 'package:prueba_match/views/license_confirmation_view.dart';
@@ -26,7 +25,6 @@ class LicenseScanScreen extends StatefulWidget {
 
 class _LicenseScanScreenState extends State<LicenseScanScreen> {
   final FaceMatchService _faceMatchService = FaceMatchService();
-  final ImageHelper _imageHelper = ImageHelper();
 
   // Bytes de imagen
   Uint8List? _documentBytes;
@@ -43,9 +41,9 @@ class _LicenseScanScreenState extends State<LicenseScanScreen> {
       ),
     );
     if (bytes != null) {
-      final compressed = await _imageHelper.compressBytes(bytes, quality: 80);
+      // Los bytes ya vienen optimizados desde CustomCameraView
       setState(() {
-        _documentBytes = compressed ?? bytes;
+        _documentBytes = bytes;
       });
     }
   }

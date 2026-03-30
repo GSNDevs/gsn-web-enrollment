@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:prueba_match/models/chofer_match_data.dart';
 import 'package:prueba_match/services/face_match_service.dart';
-import 'package:prueba_match/utils/image_helper.dart';
 import 'package:prueba_match/views/confirmation_view.dart';
 import 'package:prueba_match/views/custom_camera_view.dart';
 
@@ -22,7 +21,6 @@ class FaceMatchScreen extends StatefulWidget {
 
 class _FaceMatchScreenState extends State<FaceMatchScreen> {
   final FaceMatchService _faceMatchService = FaceMatchService();
-  final ImageHelper _imageHelper = ImageHelper();
 
   // Bytes de imágenes
   Uint8List? _selfieBytes;
@@ -40,12 +38,13 @@ class _FaceMatchScreenState extends State<FaceMatchScreen> {
       ),
     );
     if (bytes != null) {
-      final compressed = await _imageHelper.compressBytes(bytes, quality: 80);
+      // Los bytes ya vienen optimizados desde CustomCameraView
+      // (redimensionados + comprimidos en un isolate)
       setState(() {
         if (isSelfie) {
-          _selfieBytes = compressed ?? bytes;
+          _selfieBytes = bytes;
         } else {
-          _documentBytes = compressed ?? bytes;
+          _documentBytes = bytes;
         }
       });
     }
