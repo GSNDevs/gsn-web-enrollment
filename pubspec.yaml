@@ -1,0 +1,31 @@
+name: prueba_match
+description: "A new Flutter project."
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.9.0
+dependencies:
+  flutter:
+    sdk: flutter
+  camera: ^0.11.2
+  dio: ^5.9.0
+  flutter_dotenv: ^6.0.0
+  flutter_localization: ^0.3.3
+  flutter_localizations:
+    sdk: flutter
+  googleapis: ^15.0.0
+  googleapis_auth: ^2.0.0
+  http: ^1.1.0
+  image_picker: ^1.2.1
+  intl: ^0.20.2
+  supabase_flutter: ^2.10.0
+  image: ^4.8.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
